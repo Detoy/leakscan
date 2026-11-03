@@ -8,3 +8,5 @@ export type Report = {
 export type Audio = { samples: Float32Array; sr: number; name: string };
 export type DbScale = { lo: number; hi: number };
 export type Spectrogram = { url: string; scale: DbScale };
+/** What a scrub did, summed over every detect-and-notch pass. */
+export type Scrubbed = { audio: Audio; ridgesNotched: number; humRemovedHz: number | null };

@@ -31,7 +31,7 @@ mod tests {
 
     #[test] fn after_reuses_before_scale_and_reads_quieter() {
         let x = synth::demo(SR);
-        let (y, _) = scrub::scrub_with(&x, SR, &Default::default());
+        let y = scrub::scrub(&x, SR);
         let before = spectrogram(&x, SR, MAX_HZ, None);
         let after = spectrogram(&y, SR, MAX_HZ, Some(before.scale));
         assert_eq!(after.scale, before.scale);
@@ -40,7 +40,7 @@ mod tests {
 
     #[test] fn self_scaling_hides_the_reduction() {
         let x = synth::demo(SR);
-        let (y, _) = scrub::scrub_with(&x, SR, &Default::default());
+        let y = scrub::scrub(&x, SR);
         let before = spectrogram(&x, SR, MAX_HZ, None);
         let shared = spectrogram(&y, SR, MAX_HZ, Some(before.scale));
         let own = spectrogram(&y, SR, MAX_HZ, None);

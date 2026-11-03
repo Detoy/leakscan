@@ -2,11 +2,20 @@ declare namespace wasm_bindgen {
     /* tslint:disable */
     /* eslint-disable */
 
+    export class Scrubbed {
+        private constructor();
+        free(): void;
+        [Symbol.dispose](): void;
+        audio(): Float32Array;
+        hum_removed_hz(): number | undefined;
+        ridges_notched(): number;
+    }
+
     export function analyze(x: Float32Array | number[], sr: number): string;
 
     export function demo(sr: number): Float32Array;
 
-    export function scrub(x: Float32Array | number[], sr: number, noise_dbfs: number): Float32Array;
+    export function scrub(x: Float32Array | number[], sr: number, noise_dbfs: number): Scrubbed;
 
     /**
      * Returns [frames, bins, hop_s, bin_hz, lo_db, hi_db, ...pixels 0..=255 frame-major].
@@ -19,9 +28,13 @@ declare type InitInput = RequestInfo | URL | Response | BufferSource | WebAssemb
 
 declare interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_scrubbed_free: (a: number, b: number) => void;
     readonly analyze: (a: number, b: number, c: number) => [number, number];
     readonly demo: (a: number) => [number, number];
-    readonly scrub: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly scrub: (a: number, b: number, c: number, d: number) => number;
+    readonly scrubbed_audio: (a: number) => [number, number];
+    readonly scrubbed_hum_removed_hz: (a: number) => number;
+    readonly scrubbed_ridges_notched: (a: number) => number;
     readonly spectrogram: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
