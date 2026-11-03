@@ -9,9 +9,10 @@ declare namespace wasm_bindgen {
     export function scrub(x: Float32Array | number[], sr: number, noise_dbfs: number): Float32Array;
 
     /**
-     * Returns [frames, bins, hop_s, bin_hz, ...u8 dB image row-major by frame].
+     * Returns [frames, bins, hop_s, bin_hz, lo_db, hi_db, ...pixels 0..=255 frame-major].
+     * Pass the lo_db/hi_db of an earlier call to draw this clip on the same scale.
      */
-    export function spectrogram(x: Float32Array | number[], sr: number, max_hz: number): Float32Array;
+    export function spectrogram(x: Float32Array | number[], sr: number, max_hz: number, lo_db?: number | null, hi_db?: number | null): Float32Array;
 
 }
 declare type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -21,7 +22,7 @@ declare interface InitOutput {
     readonly analyze: (a: number, b: number, c: number) => [number, number];
     readonly demo: (a: number) => [number, number];
     readonly scrub: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly spectrogram: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly spectrogram: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;

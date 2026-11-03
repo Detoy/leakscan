@@ -57,21 +57,26 @@ let wasm_bindgen = (function(exports) {
     exports.scrub = scrub;
 
     /**
-     * Returns [frames, bins, hop_s, bin_hz, ...u8 dB image row-major by frame].
+     * Returns [frames, bins, hop_s, bin_hz, lo_db, hi_db, ...pixels 0..=255 frame-major].
+     * Pass the lo_db/hi_db of an earlier call to draw this clip on the same scale.
      * @param {Float32Array | number[]} x
      * @param {number} sr
      * @param {number} max_hz
+     * @param {number | null} [lo_db]
+     * @param {number | null} [hi_db]
      * @returns {Float32Array}
      */
-    function spectrogram(x, sr, max_hz) {
+    function spectrogram(x, sr, max_hz, lo_db, hi_db) {
         const val2 = +sr;
         const val3 = +max_hz;
+        const val4 = +(isLikeNone(lo_db) ? Number.MAX_SAFE_INTEGER : Math.fround(lo_db));
+        const val5 = +(isLikeNone(hi_db) ? Number.MAX_SAFE_INTEGER : Math.fround(hi_db));
         const ptr0 = passArrayF32ToWasm0(x, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.spectrogram(ptr0, len0, val2, val3);
-        var v4 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        const ret = wasm.spectrogram(ptr0, len0, val2, val3, val4, val5);
+        var v6 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-        return v4;
+        return v6;
     }
     exports.spectrogram = spectrogram;
     function __wbg_get_imports() {
@@ -116,6 +121,10 @@ let wasm_bindgen = (function(exports) {
             cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
         }
         return cachedUint8ArrayMemory0;
+    }
+
+    function isLikeNone(x) {
+        return x === undefined || x === null;
     }
 
     function passArrayF32ToWasm0(arg, malloc) {

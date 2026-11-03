@@ -29,8 +29,15 @@ mod wasm {
     #[wasm_bindgen] pub fn scrub(x: &[f32], sr: f32, noise_dbfs: f32) -> Vec<f32> {
         super::scrub::scrub_with(x, sr, &super::scrub::ScrubOptions { noise_dbfs, ..Default::default() }).0 }
     #[wasm_bindgen] pub fn demo(sr: f32) -> Vec<f32> { super::synth::demo(sr) }
-    /// Returns [frames, bins, hop_s, bin_hz, ...u8 dB image row-major by frame].
-    #[wasm_bindgen] pub fn spectrogram(x: &[f32], sr: f32, max_hz: f32) -> Vec<f32> { super::spectro::spectrogram(x, sr, max_hz) }
+    /// Returns [frames, bins, hop_s, bin_hz, lo_db, hi_db, ...pixels 0..=255 frame-major].
+    /// Pass the lo_db/hi_db of an earlier call to draw this clip on the same scale.
+    #[wasm_bindgen] pub fn spectrogram(x: &[f32], sr: f32, max_hz: f32, lo_db: Option<f32>, hi_db: Option<f32>) -> Vec<f32> {
+        let scale = lo_db.zip(hi_db).map(|(lo, hi)| super::spectro::DbScale { lo, hi });
+        let s = super::spectro::spectrogram(x, sr, max_hz, scale);
+        let mut out = vec![s.frames as f32, s.bins as f32, s.hop_s, s.bin_hz, s.scale.lo, s.scale.hi];
+        out.extend(s.pixels.iter().map(|&p| p as f32));
+        out
+    }
 }
 
 #[cfg(test)]
