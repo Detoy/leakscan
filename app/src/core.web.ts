@@ -1,6 +1,6 @@
 // Web implementation: Rust core compiled to WASM (wasm-pack, no-modules target),
 // loaded from this site's own /core folder. Everything runs locally in the browser.
-import type { Audio, DbScale, Report, Spectrogram } from './types';
+import type { Audio, DbScale, Report, Scrubbed, Spectrogram } from './types';
 
 export const supported = true;
 const MAX_HZ = 600;
@@ -48,8 +48,12 @@ export function pickAudio(): Promise<Audio> {
 
 export function demoAudio(): Audio { const sr = 16000; return { samples: W.demo(sr), sr, name: 'synthetic-demo.wav' }; }
 export function analyze(a: Audio): Report { return JSON.parse(W.analyze(a.samples, a.sr)); }
-export function scrub(a: Audio, noiseDbfs = -52): Audio {
-  return { samples: W.scrub(a.samples, a.sr, noiseDbfs), sr: a.sr, name: a.name.replace(/\.[^.]+$/, '') + '-scrubbed.wav' };
+export function scrub(a: Audio, noiseDbfs = -52): Scrubbed {
+  const out = W.scrub(a.samples, a.sr, noiseDbfs);
+  try {
+    const audio = { samples: out.audio(), sr: a.sr, name: a.name.replace(/\.[^.]+$/, '') + '-scrubbed.wav' };
+    return { audio, ridgesNotched: out.ridges_notched(), humRemovedHz: out.hum_removed_hz() ?? null };
+  } finally { out.free(); }
 }
 
 function color(v: number): [number, number, number] {

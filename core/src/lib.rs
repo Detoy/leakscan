@@ -26,8 +26,14 @@ pub fn report_json(r: &Report) -> String {
 mod wasm {
     use wasm_bindgen::prelude::*;
     #[wasm_bindgen] pub fn analyze(x: &[f32], sr: f32) -> String { super::report_json(&super::detect::analyze(x, sr)) }
-    #[wasm_bindgen] pub fn scrub(x: &[f32], sr: f32, noise_dbfs: f32) -> Vec<f32> {
-        super::scrub::scrub_with(x, sr, &super::scrub::ScrubOptions { noise_dbfs, ..Default::default() }).0 }
+    #[wasm_bindgen] pub struct Scrubbed(super::scrub::Scrubbed);
+    #[wasm_bindgen] impl Scrubbed {
+        pub fn audio(&self) -> Vec<f32> { self.0.audio.clone() }
+        pub fn ridges_notched(&self) -> usize { self.0.ridges_notched }
+        pub fn hum_removed_hz(&self) -> Option<f32> { self.0.hum_removed_hz }
+    }
+    #[wasm_bindgen] pub fn scrub(x: &[f32], sr: f32, noise_dbfs: f32) -> Scrubbed {
+        Scrubbed(super::scrub::scrub_with(x, sr, &super::scrub::ScrubOptions { noise_dbfs, ..Default::default() })) }
     #[wasm_bindgen] pub fn demo(sr: f32) -> Vec<f32> { super::synth::demo(sr) }
     /// Returns [frames, bins, hop_s, bin_hz, lo_db, hi_db, ...pixels 0..=255 frame-major].
     /// Pass the lo_db/hi_db of an earlier call to draw this clip on the same scale.
@@ -75,7 +81,7 @@ mod tests {
     }
     #[test] fn scrub_lowers_score() {
         let x = synth::demo(SR);
-        let (y, before) = scrub::scrub_with(&x, SR, &Default::default());
+        let scrub::Scrubbed { audio: y, before, .. } = scrub::scrub_with(&x, SR, &Default::default());
         let after = detect::analyze(&y, SR);
         assert!(after.score < before.score, "{} -> {}", before.score, after.score);
         assert!(after.flyovers.is_empty() && !after.hum.detected, "{:?} {:?}", after.flyovers.iter().map(|f| (f.peak_s,f.f_start,f.f_end)).collect::<Vec<_>>(), after.hum);

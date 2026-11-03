@@ -4,6 +4,50 @@ let wasm_bindgen = (function(exports) {
         script_src = new URL(document.currentScript.src, location.href).toString();
     }
 
+    class Scrubbed {
+        static __wrap(ptr) {
+            const obj = Object.create(Scrubbed.prototype);
+            obj.__wbg_ptr = ptr;
+            ScrubbedFinalization.register(obj, obj.__wbg_ptr, obj);
+            return obj;
+        }
+        __destroy_into_raw() {
+            const ptr = this.__wbg_ptr;
+            this.__wbg_ptr = 0;
+            ScrubbedFinalization.unregister(this);
+            return ptr;
+        }
+        free() {
+            const ptr = this.__destroy_into_raw();
+            wasm.__wbg_scrubbed_free(ptr, 0);
+        }
+        /**
+         * @returns {Float32Array}
+         */
+        audio() {
+            const ret = wasm.scrubbed_audio(this.__wbg_ptr);
+            var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+            return v1;
+        }
+        /**
+         * @returns {number | undefined}
+         */
+        hum_removed_hz() {
+            const ret = wasm.scrubbed_hum_removed_hz(this.__wbg_ptr);
+            return ret === Number.MAX_SAFE_INTEGER ? undefined : ret;
+        }
+        /**
+         * @returns {number}
+         */
+        ridges_notched() {
+            const ret = wasm.scrubbed_ridges_notched(this.__wbg_ptr);
+            return ret >>> 0;
+        }
+    }
+    if (Symbol.dispose) Scrubbed.prototype[Symbol.dispose] = Scrubbed.prototype.free;
+    exports.Scrubbed = Scrubbed;
+
     /**
      * @param {Float32Array | number[]} x
      * @param {number} sr
@@ -42,7 +86,7 @@ let wasm_bindgen = (function(exports) {
      * @param {Float32Array | number[]} x
      * @param {number} sr
      * @param {number} noise_dbfs
-     * @returns {Float32Array}
+     * @returns {Scrubbed}
      */
     function scrub(x, sr, noise_dbfs) {
         const val2 = +sr;
@@ -50,9 +94,7 @@ let wasm_bindgen = (function(exports) {
         const ptr0 = passArrayF32ToWasm0(x, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.scrub(ptr0, len0, val2, val3);
-        var v4 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-        return v4;
+        return Scrubbed.__wrap(ret);
     }
     exports.scrub = scrub;
 
@@ -82,6 +124,9 @@ let wasm_bindgen = (function(exports) {
     function __wbg_get_imports() {
         const import0 = {
             __proto__: null,
+            __wbg___wbindgen_throw_4c88d8bf264fd984: function(arg0, arg1) {
+                throw new Error(getStringFromWasm0(arg0, arg1));
+            },
             __wbindgen_init_externref_table: function() {
                 const table = wasm.__wbindgen_externrefs;
                 table.set(0, undefined);
@@ -96,6 +141,10 @@ let wasm_bindgen = (function(exports) {
             "./leakscan_core_bg.js": import0,
         };
     }
+
+    const ScrubbedFinalization = (typeof FinalizationRegistry === 'undefined')
+        ? { register: () => {}, unregister: () => {} }
+        : new FinalizationRegistry(ptr => wasm.__wbg_scrubbed_free(ptr, 1));
 
     function getArrayF32FromWasm0(ptr, len) {
         ptr = ptr >>> 0;

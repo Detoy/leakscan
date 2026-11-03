@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as core from './src/core';
-import type { Audio, Report, Spectrogram } from './src/types';
+import type { Audio, Report, Scrubbed, Spectrogram } from './src/types';
 
 const C = { bg: '#0b0d1a', card: '#151933', line: '#262b4d', text: '#eef0ff', dim: '#9aa0c8', accent: '#ff7a45', ok: '#3ddc97', mid: '#ffcf5a', hi: '#ff5a6e', hum: '#38bdf8' };
 const levelColor = (l: string) => (l === 'high' ? C.hi : l === 'medium' || l === 'moderate' ? C.mid : C.ok);
@@ -44,14 +44,17 @@ export default function App() {
   const [err, setErr] = useState('');
   const [stage, setStage] = useState<Stage>('home');
   const [orig, setOrig] = useState<Scanned | null>(null);
-  const [clean, setClean] = useState<Scanned | null>(null);
+  const [clean, setClean] = useState<(Scanned & { applied: Omit<Scrubbed, 'audio'> }) | null>(null);
 
   const run = (label: string, fn: () => unknown) => {
     setBusy(label); setErr('');
     setTimeout(async () => { try { await fn(); } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setBusy(''); } }, 30);
   };
   const scan = (a: Audio) => { const r = core.analyze(a); const o = { a, r, spec: core.spectrogram(a, r) }; setOrig(o); setClean(null); setStage('results'); return o; };
-  const scrubFrom = (o: Scanned) => { const a = core.scrub(o.a); const r = core.analyze(a); setClean({ a, r, spec: core.spectrogram(a, r, o.spec.scale) }); setStage('scrubbed'); };
+  const scrubFrom = (o: Scanned) => {
+    const { audio: a, ...applied } = core.scrub(o.a); const r = core.analyze(a);
+    setClean({ a, r, spec: core.spectrogram(a, r, o.spec.scale), applied }); setStage('scrubbed');
+  };
   const doScrub = () => { if (orig) scrubFrom(orig); };
 
   useEffect(() => {
@@ -132,7 +135,7 @@ export default function App() {
                   </View>))}
               </View>
               <View style={s.card}>
-                <Text style={s.body}>Applied: notch filters along {orig.r.flyovers.reduce((n, f) => n + f.ridges.length, 0)} curve(s){orig.r.hum.detected ? `, ${orig.r.hum.base_hz} Hz hum + harmonics removed` : ''}, light noise bed (−52 dBFS), automatic re-scan. Export is a plain WAV with no metadata.</Text>
+                <Text style={s.body}>Applied: notch filters along {clean.applied.ridgesNotched} curve(s){clean.applied.humRemovedHz !== null ? `, ${clean.applied.humRemovedHz} Hz hum + harmonics removed` : ''}, light noise bed (−52 dBFS), automatic re-scan. Export is a plain WAV with no metadata.</Text>
                 <Text style={s.dim}>Scrubbing reduces these cues; it does not guarantee a clip can't be located. For sensitive material also apply the suggested cuts and avoid posting exact times.</Text>
                 <View style={[s.row, { gap: 12, marginTop: 12 }]}>
                   <Btn label="Download clean WAV" onPress={() => core.exportWav(clean.a)} />
