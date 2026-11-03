@@ -4,10 +4,10 @@ use crate::fft::{fft, C};
 pub struct Stft { pub n: usize, pub hop: usize, pub sr: f32, pub frames: Vec<Vec<C>>, pub len: usize }
 
 /// FFT size giving ~3–4 Hz bins at any sample rate (needed to resolve slow Doppler sweeps).
-pub fn fft_size(sr: f32) -> usize { ((sr / 4.0) as usize).next_power_of_two().max(256) }
+fn fft_size(sr: f32) -> usize { ((sr / 4.0) as usize).next_power_of_two().max(256) }
 
-pub fn hann(n: usize) -> Vec<f32> {
-    (0..n).map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / n as f32).cos()).collect()
+fn hann(n: usize) -> Vec<f32> {
+    (0..n).map(|i| 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / n as f32).cos()).collect()
 }
 
 impl Stft {

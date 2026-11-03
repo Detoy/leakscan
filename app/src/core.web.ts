@@ -4,7 +4,15 @@ import type { Audio, DbScale, Report, Scrubbed, Spectrogram } from './types';
 
 export const supported = true;
 const MAX_HZ = 600;
-let W: any = null;
+type CoreWasm = {
+  analyze(x: Float32Array, sr: number): string;
+  scrub(x: Float32Array, sr: number, noiseDbfs: number): { audio(): Float32Array; ridges_notched(): number; hum_removed_hz(): number | undefined; free(): void };
+  demo(sr: number): Float32Array;
+  spectrogram(x: Float32Array, sr: number, maxHz: number, loDb?: number, hiDb?: number): Float32Array;
+};
+type CoreInit = CoreWasm & ((opts: { module_or_path: string }) => Promise<unknown>);
+let W: CoreWasm | null = null;
+const core = (): CoreWasm => { if (!W) throw new Error('On-device engine is not loaded yet.'); return W; };
 
 function base(): string {
   const p = window.location.pathname;
@@ -22,7 +30,7 @@ export async function loadCore(): Promise<void> {
   const expose = document.createElement('script');
   expose.textContent = 'window.__leakscanCore = wasm_bindgen;';
   document.head.appendChild(expose);
-  const wb = (window as any).__leakscanCore;
+  const wb = (window as unknown as { __leakscanCore: CoreInit }).__leakscanCore;
   await wb({ module_or_path: `${base()}/core/leakscan_core_bg.wasm` });
   W = wb;
 }
@@ -46,10 +54,10 @@ export function pickAudio(): Promise<Audio> {
   });
 }
 
-export function demoAudio(): Audio { const sr = 16000; return { samples: W.demo(sr), sr, name: 'synthetic-demo.wav' }; }
-export function analyze(a: Audio): Report { return JSON.parse(W.analyze(a.samples, a.sr)); }
+export function demoAudio(): Audio { const sr = 16000; return { samples: core().demo(sr), sr, name: 'synthetic-demo.wav' }; }
+export function analyze(a: Audio): Report { return JSON.parse(core().analyze(a.samples, a.sr)); }
 export function scrub(a: Audio, noiseDbfs = -52): Scrubbed {
-  const out = W.scrub(a.samples, a.sr, noiseDbfs);
+  const out = core().scrub(a.samples, a.sr, noiseDbfs);
   try {
     const audio = { samples: out.audio(), sr: a.sr, name: a.name.replace(/\.[^.]+$/, '') + '-scrubbed.wav' };
     return { audio, ridgesNotched: out.ridges_notched(), humRemovedHz: out.hum_removed_hz() ?? null };
@@ -65,7 +73,7 @@ const HEADER = 6;
 
 /** Renders `a` with detections from `r`. Pass the scale of an earlier render to keep brightness comparable. */
 export function spectrogram(a: Audio, r: Report, scale?: DbScale): Spectrogram {
-  const out: Float32Array = W.spectrogram(a.samples, a.sr, MAX_HZ, scale?.lo, scale?.hi);
+  const out = core().spectrogram(a.samples, a.sr, MAX_HZ, scale?.lo, scale?.hi);
   const frames = out[0], bins = out[1], binHz = out[3];
   const c = document.createElement('canvas'); c.width = frames; c.height = bins;
   const g = c.getContext('2d')!; const img = g.createImageData(frames, bins);
