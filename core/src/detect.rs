@@ -14,7 +14,7 @@ impl Ridge {
 pub struct Flyover { pub start_s: f32, pub end_s: f32, pub peak_s: f32, pub f_start: f32, pub f_end: f32, pub ridges: Vec<Ridge> }
 
 #[derive(Clone, Debug, Default)]
-pub struct Hum { pub detected: bool, pub base_hz: f32, pub harmonics: Vec<f32>, pub strength: f32 }
+pub struct Hum { pub detected: bool, pub base_hz: f32, pub harmonics: Vec<f32> }
 
 #[derive(Clone, Debug)]
 pub struct Report {
@@ -23,18 +23,31 @@ pub struct Report {
     pub hum: Hum,
     /// 0–100 exposure score.
     pub score: u32,
-    pub level: &'static str,
-    /// Qualitative/relative "how narrow" rating only: "low" | "moderate" | "high".
-    pub narrowness: &'static str,
+    pub level: Level,
+    /// Relative "how narrow" rating only; never a place.
+    pub narrowness: Narrowness,
     pub notes: Vec<String>,
 }
 
-pub const BAND_LO: f32 = 60.0;
-pub const BAND_HI: f32 = 2000.0;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Level { Low, Medium, High }
+impl Level {
+    fn from_score(score: u32) -> Self { if score >= 60 { Self::High } else if score >= 25 { Self::Medium } else { Self::Low } }
+    pub fn as_str(self) -> &'static str { match self { Self::Low => "low", Self::Medium => "medium", Self::High => "high" } }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Narrowness { Low, Moderate, High }
+impl Narrowness {
+    pub fn as_str(self) -> &'static str { match self { Self::Low => "low", Self::Moderate => "moderate", Self::High => "high" } }
+}
+
+const BAND_LO: f32 = 60.0;
+const BAND_HI: f32 = 2000.0;
 
 fn near_hum(f: f32, base: f32, tol: f32) -> bool {
     if base <= 0.0 { return false; }
-    let k = (f / base).round(); k >= 1.0 && k <= 20.0 && (f - k * base).abs() < tol
+    let k = (f / base).round(); (1.0..=20.0).contains(&k) && (f - k * base).abs() < tol
 }
 
 /// Parabolic-interpolated sub-bin peak frequency.
@@ -66,7 +79,7 @@ pub fn find_ridges(st: &Stft, hum_base: f32) -> Vec<Ridge> {
     merged.into_iter().filter(|r| r.freqs.len() >= min_len && is_doppler(r)).collect()
 }
 
-pub fn find_ridges_raw(st: &Stft, hum_base: f32) -> Vec<Ridge> {
+fn find_ridges_raw(st: &Stft, hum_base: f32) -> Vec<Ridge> {
     let hz = st.bin_hz();
     let lo = (BAND_LO / hz).ceil() as usize; let hi = ((BAND_HI / hz) as usize).min(st.n / 2 - 1);
     let mut active: Vec<(Ridge, usize)> = vec![]; // ridge, last frame seen
@@ -92,7 +105,7 @@ pub fn find_ridges_raw(st: &Stft, hum_base: f32) -> Vec<Ridge> {
             let mut best: Option<(usize, f32)> = None;
             for (i, p) in peaks.iter().enumerate() {
                 let d = (p - pred).abs();
-                if !used[i] && d < 2.5 * hz && best.map_or(true, |b| d < b.1) { best = Some((i, d)); }
+                if !used[i] && d < 2.5 * hz && best.is_none_or(|b| d < b.1) { best = Some((i, d)); }
             }
             if let Some((i, _)) = best {
                 used[i] = true;
@@ -130,7 +143,7 @@ pub fn detect_hum(st: &Stft) -> Hum {
         v.sort_by(|a, b| a.partial_cmp(b).unwrap()); v[v.len() / 2] }).collect();
     let mut best = Hum::default();
     for base in [50.0f32, 60.0] {
-        let mut hs = vec![]; let mut strength = 0.0;
+        let mut hs = vec![];
         for h in 1..=8 {
             let fh = base * h as f32; let k = (fh / hz).round() as usize;
             if k + 10 >= nb || k < 10 { break; }
@@ -138,10 +151,10 @@ pub fn detect_hum(st: &Stft) -> Hum {
             let mut nbr: Vec<f32> = (3..10).flat_map(|d| [avg[k - d], avg[k + d]]).collect();
             nbr.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let ratio = pk / (nbr[nbr.len() / 2] + 1e-12);
-            if ratio > 5.0 { hs.push(fh); strength += ratio.log10(); }
+            if ratio > 5.0 { hs.push(fh); }
         }
         if hs.len() > best.harmonics.len() { let has_low = hs.iter().any(|h| *h <= base * 2.0 + 1.0);
-            best = Hum { detected: hs.len() >= 2 && has_low, base_hz: base, harmonics: hs, strength }; }
+            best = Hum { detected: hs.len() >= 2 && has_low, base_hz: base, harmonics: hs }; }
     }
     best
 }
@@ -175,8 +188,8 @@ pub fn analyze_stft(st: &Stft) -> Report {
     if n >= 2 { score += 15; notes.push("Multiple passes: the gaps between them make the timing more distinctive.".into()); }
     if hum.detected { score += 15 + (hum.harmonics.len() as u32).min(10); notes.push(format!("{} Hz mains hum with {} harmonic(s): hints at region and can help date a recording.", hum.base_hz, hum.harmonics.len())); }
     let score = score.min(100);
-    let level = if score >= 60 { "high" } else if score >= 25 { "medium" } else { "low" };
-    let narrowness = if n >= 2 { "high" } else if n == 1 || hum.detected { "moderate" } else { "low" };
+    let level = Level::from_score(score);
+    let narrowness = if n >= 2 { Narrowness::High } else if n == 1 || hum.detected { Narrowness::Moderate } else { Narrowness::Low };
     if notes.is_empty() { notes.push("No Doppler passes or mains hum found. This reduces risk but does not guarantee the clip is clean.".into()); }
     Report { duration_s: st.len as f32 / st.sr, flyovers, hum, score, level, narrowness, notes }
 }

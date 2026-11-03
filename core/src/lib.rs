@@ -2,7 +2,12 @@
 //! passes, mains hum) that could help someone work out where/when a clip was recorded.
 //! Defensive only: no geolocation, no flight-data matching, no coordinate output.
 //! Scrubbing reduces these cues; it does not guarantee a clip is safe.
-pub mod fft; pub mod stft; pub mod detect; pub mod scrub; pub mod synth; pub mod spectro;
+pub mod detect;
+mod fft;
+pub mod scrub;
+pub mod spectro;
+mod stft;
+pub mod synth;
 
 use detect::Report;
 
@@ -17,7 +22,7 @@ pub fn report_json(r: &Report) -> String {
     }).collect();
     let cuts: Vec<String> = scrub::suggest_cuts(r).iter().map(|c| format!("{{\"start_s\":{:.2},\"end_s\":{:.2},\"reason\":\"{}\"}}", c.start_s, c.end_s, esc(&c.reason))).collect();
     format!("{{\"duration_s\":{:.2},\"score\":{},\"level\":\"{}\",\"narrowness\":\"{}\",\"hum\":{{\"detected\":{},\"base_hz\":{},\"harmonics\":[{}]}},\"flyovers\":[{}],\"cuts\":[{}],\"notes\":[{}]}}",
-        r.duration_s, r.score, r.level, r.narrowness, r.hum.detected, r.hum.base_hz,
+        r.duration_s, r.score, r.level.as_str(), r.narrowness.as_str(), r.hum.detected, r.hum.base_hz,
         r.hum.harmonics.iter().map(|h| format!("{}", h)).collect::<Vec<_>>().join(","), fl.join(","), cuts.join(","),
         r.notes.iter().map(|n| format!("\"{}\"", esc(n))).collect::<Vec<_>>().join(","))
 }
@@ -63,7 +68,7 @@ mod tests {
         assert!((r.flyovers[0].peak_s - 17.0).abs() < 2.0);
         assert!((r.flyovers[1].peak_s - 44.0).abs() < 2.0);
         assert!(r.hum.detected && r.hum.base_hz == 50.0);
-        assert_eq!(r.level, "high");
+        assert_eq!(r.level, detect::Level::High);
     }
     #[test] fn detects_60hz() {
         let x = synth::synth(SR, 20.0, &[], Some(60.0), 3);
@@ -76,7 +81,7 @@ mod tests {
     }
     #[test] fn flat_tone_is_not_a_flyover() {
         let mut x = synth::synth(SR, 20.0, &[], None, 5);
-        for (i, v) in x.iter_mut().enumerate() { *v += 0.05 * (2.0 * 3.14159 * 333.0 * i as f32 / SR).sin(); }
+        for (i, v) in x.iter_mut().enumerate() { *v += 0.05 * (std::f32::consts::TAU * 333.0 * i as f32 / SR).sin(); }
         assert!(detect::analyze(&x, SR).flyovers.is_empty());
     }
     #[test] fn scrub_lowers_score() {

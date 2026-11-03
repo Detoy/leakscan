@@ -14,7 +14,7 @@ pub fn fft(buf: &mut [C], inverse: bool) {
     }
     let mut len = 2;
     while len <= n {
-        let ang = 2.0 * std::f64::consts::PI / len as f64 * if inverse { 1.0 } else { -1.0 };
+        let ang = std::f64::consts::TAU / len as f64 * if inverse { 1.0 } else { -1.0 };
         let (wr, wi) = (ang.cos(), ang.sin());
         for start in (0..n).step_by(len) {
             let (mut cr, mut ci) = (1.0f64, 0.0f64);

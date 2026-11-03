@@ -5,7 +5,7 @@ import * as core from './src/core';
 import type { Audio, Report, Scrubbed, Spectrogram } from './src/types';
 
 const C = { bg: '#0b0d1a', card: '#151933', line: '#262b4d', text: '#eef0ff', dim: '#9aa0c8', accent: '#ff7a45', ok: '#3ddc97', mid: '#ffcf5a', hi: '#ff5a6e', hum: '#38bdf8' };
-const levelColor = (l: string) => (l === 'high' ? C.hi : l === 'medium' || l === 'moderate' ? C.mid : C.ok);
+const levelColor = (l: Report['level'] | Report['narrowness']) => (l === 'high' ? C.hi : l === 'medium' || l === 'moderate' ? C.mid : C.ok);
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 type Stage = 'home' | 'results' | 'scrubbed';
@@ -33,8 +33,8 @@ function Score({ r, title }: { r: Report; title: string }) {
 }
 
 function AudioEl({ a }: { a: Audio }) {
-  if (Platform.OS !== 'web') return null;
   const [url] = useState(() => core.audioUrl(a));
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return React.createElement('audio', { src: url, controls: true, style: { width: '100%', marginTop: 8 } });
 }
 
@@ -48,7 +48,7 @@ export default function App() {
 
   const run = (label: string, fn: () => unknown) => {
     setBusy(label); setErr('');
-    setTimeout(async () => { try { await fn(); } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setBusy(''); } }, 30);
+    setTimeout(async () => { try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(''); } }, 30);
   };
   const scan = (a: Audio) => { const r = core.analyze(a); const o = { a, r, spec: core.spectrogram(a, r) }; setOrig(o); setClean(null); setStage('results'); return o; };
   const scrubFrom = (o: Scanned) => {
@@ -127,11 +127,11 @@ export default function App() {
 
             {stage === 'scrubbed' && clean && (<>
               <View style={[s.row, { gap: 12, flexWrap: 'wrap' }]}>
-                {[['Before', orig], ['After', clean]].map(([t, x]: any) => (
+                {([['Before', orig], ['After', clean]] as const).map(([t, x]) => (
                   <View key={t} style={[s.card, { flex: 1, minWidth: 300 }]}>
                     <Text style={s.label}>{t} · score <Text style={{ color: levelColor(x.r.level) }}>{x.r.score}/100 ({x.r.level})</Text> · {x.r.flyovers.length} passes · hum {x.r.hum.detected ? 'yes' : 'no'}</Text>
                     <Image source={{ uri: x.spec.url }} style={s.specSmall} resizeMode="stretch" />
-                    <AudioEl a={x.a} />
+                    {Platform.OS === 'web' && <AudioEl a={x.a} />}
                   </View>))}
               </View>
               <View style={s.card}>
