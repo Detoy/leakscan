@@ -6,3 +6,5 @@ export type Report = {
   flyovers: Flyover[]; cuts: { start_s: number; end_s: number; reason: string }[]; notes: string[];
 };
 export type Audio = { samples: Float32Array; sr: number; name: string };
+export type DbScale = { lo: number; hi: number };
+export type Spectrogram = { url: string; scale: DbScale };

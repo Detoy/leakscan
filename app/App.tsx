@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as core from './src/core';
-import type { Audio, Report } from './src/types';
+import type { Audio, Report, Spectrogram } from './src/types';
 
 const C = { bg: '#0b0d1a', card: '#151933', line: '#262b4d', text: '#eef0ff', dim: '#9aa0c8', accent: '#ff7a45', ok: '#3ddc97', mid: '#ffcf5a', hi: '#ff5a6e', hum: '#38bdf8' };
 const levelColor = (l: string) => (l === 'high' ? C.hi : l === 'medium' || l === 'moderate' ? C.mid : C.ok);
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 type Stage = 'home' | 'results' | 'scrubbed';
+type Scanned = { a: Audio; r: Report; spec: Spectrogram };
 
 function Btn({ label, onPress, kind = 'primary' }: { label: string; onPress: () => void; kind?: 'primary' | 'ghost' }) {
   return (
@@ -42,24 +43,23 @@ export default function App() {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   const [stage, setStage] = useState<Stage>('home');
-  const [orig, setOrig] = useState<{ a: Audio; r: Report; img: string } | null>(null);
-  const [clean, setClean] = useState<{ a: Audio; r: Report; img: string } | null>(null);
+  const [orig, setOrig] = useState<Scanned | null>(null);
+  const [clean, setClean] = useState<Scanned | null>(null);
 
-  const run = (label: string, fn: () => Promise<void> | void) => {
+  const run = (label: string, fn: () => unknown) => {
     setBusy(label); setErr('');
     setTimeout(async () => { try { await fn(); } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setBusy(''); } }, 30);
   };
-  const scan = (a: Audio) => { const r = core.analyze(a); setOrig({ a, r, img: core.spectrogramUrl(a, r) }); setClean(null); setStage('results'); };
-  const doScrub = () => { if (!orig) return; const a = core.scrub(orig.a); const r = core.analyze(a); setClean({ a, r, img: core.spectrogramUrl(a, r) }); setStage('scrubbed'); };
+  const scan = (a: Audio) => { const r = core.analyze(a); const o = { a, r, spec: core.spectrogram(a, r) }; setOrig(o); setClean(null); setStage('results'); return o; };
+  const scrubFrom = (o: Scanned) => { const a = core.scrub(o.a); const r = core.analyze(a); setClean({ a, r, spec: core.spectrogram(a, r, o.spec.scale) }); setStage('scrubbed'); };
+  const doScrub = () => { if (orig) scrubFrom(orig); };
 
   useEffect(() => {
     if (!core.supported) return;
     core.loadCore().then(() => {
       setReady(true);
       const demo = Platform.OS === 'web' ? new URLSearchParams(window.location.search).get('demo') : null;
-      if (demo) run('Scanning demo…', () => { const a = core.demoAudio(); scan(a);
-        if (demo === 'scrub') { const r = core.analyze(a); const b = core.scrub(a); const rb = core.analyze(b);
-          setOrig({ a, r, img: core.spectrogramUrl(a, r) }); setClean({ a: b, r: rb, img: core.spectrogramUrl(b, rb) }); setStage('scrubbed'); } });
+      if (demo) run('Scanning demo…', () => { const o = scan(core.demoAudio()); if (demo === 'scrub') scrubFrom(o); });
     }).catch((e) => setErr(String(e)));
   }, []);
 
@@ -106,7 +106,7 @@ export default function App() {
             {stage === 'results' && (<>
               <View style={s.card}>
                 <Text style={s.label}>Spectrogram 0–600 Hz · <Text style={{ color: C.accent }}>━ Doppler passes</Text>  <Text style={{ color: C.hum }}>┄ mains hum</Text></Text>
-                <Image source={{ uri: orig.img }} style={s.spec} resizeMode="stretch" />
+                <Image source={{ uri: orig.spec.url }} style={s.spec} resizeMode="stretch" />
               </View>
               <View style={[s.row, { gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }]}>
                 <Score r={orig.r} title="Exposure score" />
@@ -127,7 +127,7 @@ export default function App() {
                 {[['Before', orig], ['After', clean]].map(([t, x]: any) => (
                   <View key={t} style={[s.card, { flex: 1, minWidth: 300 }]}>
                     <Text style={s.label}>{t} · score <Text style={{ color: levelColor(x.r.level) }}>{x.r.score}/100 ({x.r.level})</Text> · {x.r.flyovers.length} passes · hum {x.r.hum.detected ? 'yes' : 'no'}</Text>
-                    <Image source={{ uri: x.img }} style={s.specSmall} resizeMode="stretch" />
+                    <Image source={{ uri: x.spec.url }} style={s.specSmall} resizeMode="stretch" />
                     <AudioEl a={x.a} />
                   </View>))}
               </View>

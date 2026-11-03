@@ -1,6 +1,6 @@
 // Web implementation: Rust core compiled to WASM (wasm-pack, no-modules target),
 // loaded from this site's own /core folder. Everything runs locally in the browser.
-import type { Audio, Report } from './types';
+import type { Audio, DbScale, Report, Spectrogram } from './types';
 
 export const supported = true;
 const MAX_HZ = 600;
@@ -57,36 +57,37 @@ function color(v: number): [number, number, number] {
   return [Math.min(255, 20 + 400 * t * t), Math.min(255, 10 + 180 * t ** 3 + 30 * t), Math.min(255, 40 + 200 * t * (1 - t) * 1.6)];
 }
 
-export function spectrogramUrl(a: Audio, r?: Report): string {
-  const out: Float32Array = W.spectrogram(a.samples, a.sr, MAX_HZ);
+const HEADER = 6;
+
+/** Renders `a` with detections from `r`. Pass the scale of an earlier render to keep brightness comparable. */
+export function spectrogram(a: Audio, r: Report, scale?: DbScale): Spectrogram {
+  const out: Float32Array = W.spectrogram(a.samples, a.sr, MAX_HZ, scale?.lo, scale?.hi);
   const frames = out[0], bins = out[1], binHz = out[3];
   const c = document.createElement('canvas'); c.width = frames; c.height = bins;
   const g = c.getContext('2d')!; const img = g.createImageData(frames, bins);
   for (let f = 0; f < frames; f++) for (let k = 0; k < bins; k++) {
-    const [R, G, B] = color(out[4 + f * bins + k]); const p = ((bins - 1 - k) * frames + f) * 4;
+    const [R, G, B] = color(out[HEADER + f * bins + k]); const p = ((bins - 1 - k) * frames + f) * 4;
     img.data[p] = R; img.data[p + 1] = G; img.data[p + 2] = B; img.data[p + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   const big = document.createElement('canvas'); big.width = 1200; big.height = 360;
   const G2 = big.getContext('2d')!; G2.imageSmoothingEnabled = true; G2.drawImage(c, 0, 0, big.width, big.height);
   const sx = big.width / frames, sy = big.height / bins;
-  if (r) {
-    if (r.hum.detected) {
-      G2.setLineDash([6, 6]); G2.strokeStyle = 'rgba(56,189,248,0.9)'; G2.lineWidth = 1.5;
-      for (let h = r.hum.base_hz; h < MAX_HZ; h += r.hum.base_hz) { const y = big.height - (h / binHz) * sy; G2.beginPath(); G2.moveTo(0, y); G2.lineTo(big.width, y); G2.stroke(); }
-      G2.setLineDash([]);
-    }
-    G2.strokeStyle = '#ff7a45'; G2.lineWidth = 3; G2.shadowColor = '#ff7a45'; G2.shadowBlur = 8;
-    for (const fo of r.flyovers) for (const rg of fo.ridges) {
-      G2.beginPath();
-      rg.freqs.forEach((fr, i) => { const x = (rg.start_frame + i) * sx, y = big.height - (fr / binHz) * sy; i ? G2.lineTo(x, y) : G2.moveTo(x, y); });
-      G2.stroke();
-    }
-    G2.shadowBlur = 0;
+  if (r.hum.detected) {
+    G2.setLineDash([6, 6]); G2.strokeStyle = 'rgba(56,189,248,0.9)'; G2.lineWidth = 1.5;
+    for (let h = r.hum.base_hz; h < MAX_HZ; h += r.hum.base_hz) { const y = big.height - (h / binHz) * sy; G2.beginPath(); G2.moveTo(0, y); G2.lineTo(big.width, y); G2.stroke(); }
+    G2.setLineDash([]);
   }
+  G2.strokeStyle = '#ff7a45'; G2.lineWidth = 3; G2.shadowColor = '#ff7a45'; G2.shadowBlur = 8;
+  for (const fo of r.flyovers) for (const rg of fo.ridges) {
+    G2.beginPath();
+    rg.freqs.forEach((fr, i) => { const x = (rg.start_frame + i) * sx, y = big.height - (fr / binHz) * sy; i ? G2.lineTo(x, y) : G2.moveTo(x, y); });
+    G2.stroke();
+  }
+  G2.shadowBlur = 0;
   G2.fillStyle = 'rgba(255,255,255,0.6)'; G2.font = '12px sans-serif';
   for (let hz = 100; hz < MAX_HZ; hz += 100) G2.fillText(`${hz} Hz`, 6, big.height - (hz / binHz) * sy - 2);
-  return big.toDataURL('image/png');
+  return { url: big.toDataURL('image/png'), scale: { lo: out[4], hi: out[5] } };
 }
 
 /** Minimal 16-bit PCM WAV: only RIFF/fmt/data chunks, so no metadata survives. */
