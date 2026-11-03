@@ -1,0 +1,7 @@
+LeakScan is dual-licensed by component:
+
+- core/  (Rust sound-processing crate)  — Apache License 2.0, see core/LICENSE
+- app/   (Expo app: web, iOS, Android)  — GNU Affero General Public License v3.0, see app/LICENSE
+
+Files outside those folders (docs, scripts, CI) are under Apache-2.0 unless stated otherwise.
+Copyright (c) 2026 Digital Junk and LeakScan contributors.
